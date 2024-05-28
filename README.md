@@ -1,4 +1,3 @@
-![image](https://github.com/vamshi009/XGBOOST-classification/assets/9864247/4dea9769-b19d-4798-8171-dc4f05fcf700)XGBOOST for classification
 Sample Dataset: credit risk dataset: https://www.kaggle.com/code/anshtanwar/credit-risk-prediction-training-and-eda
 
 Feature Engineering:
