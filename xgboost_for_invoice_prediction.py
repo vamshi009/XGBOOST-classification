@@ -1,4 +1,4 @@
-import os, pickle
+import os, pickle, json
 import numpy as np
 import pandas as pd
 from sklearn.datasets import make_hastie_10_2
@@ -66,6 +66,108 @@ def get_avg_amount_of_pays_per_type(data_df, cust_number, issue_date_format, pay
             amount = amount + row['total_open_amount']
 
     return amount/(count+0.1)
+
+
+
+def load_and_feature_engineering_on_test():
+
+    hist_dump_df = pd.read_csv('invoice_dataset.csv')
+    df = pd.read_csv('invoice_dataset_test.csv')
+    print(df.columns)
+
+    df['issue_date_format'] = pd.to_datetime(df['issue_date'], format='mixed')
+    df['due_in_date_format'] = pd.to_datetime(df['due_in_date'], format='mixed')
+    print("data shape before ", df.shape)
+
+    data_df = df
+    #ground truth data
+    data_df['sector_format'] = data_df['Industry_Sector'].apply(lambda x: get_sector(x))
+
+    #we need to understand the no of days due for payment
+    data_df['no_of_days_for_due_pay'] = (data_df['due_in_date_format'] - data_df['issue_date_format']).dt.days
+
+    #converting to US Dollars so that we have a same scale
+    data_df['US_Dollars'] = data_df.apply(lambda x: convert_to_usd('USD', x.total_open_amount), axis=1)
+
+#    data_df = data_df[:1000]
+    # We are obtaining this info because we need to differentiatte between these classes
+
+    #we will obtain the no of Early payments
+    data_df['no_of_early_pays'] = data_df.apply(lambda x: get_no_of_pays_per_type(hist_dump_df, x.cust_number, x.issue_date_format, pay_type='Early'),axis=1)
+
+    #we will obtain avg amount of Early payments
+    data_df['avg_of_early_pays'] = data_df.apply(lambda x: get_avg_amount_of_pays_per_type(hist_dump_df, x.cust_number, x.issue_date_format, pay_type='Early'),axis=1)
+
+
+    
+    #we will obtain the no of OnTime payments
+    data_df['no_of_OnTime_pays'] = data_df.apply(lambda x: get_no_of_pays_per_type(hist_dump_df, x.cust_number, x.issue_date_format, pay_type='OnTime'),axis=1)
+
+    #we will obtain avg amount of OnTime payments
+    data_df['avg_of_OnTime_pays'] = data_df.apply(lambda x: get_avg_amount_of_pays_per_type(hist_dump_df, x.cust_number, x.issue_date_format, pay_type='OnTime'),axis=1)
+
+    #we will obtain the no of late payments
+    data_df['no_of_late_pays'] = data_df.apply(lambda x: get_no_of_pays_per_type(hist_dump_df, x.cust_number, x.issue_date_format, pay_type='Late'),axis=1)
+
+    #we will obtain avg amount of late payments
+    data_df['avg_of_late_pays'] = data_df.apply(lambda x: get_avg_amount_of_pays_per_type(hist_dump_df, x.cust_number, x.issue_date_format, pay_type='Late'),axis=1)
+
+    #we will obtain the no of VeryLate payments
+    data_df['no_of_VeryLate_pays'] = data_df.apply(lambda x: get_no_of_pays_per_type(hist_dump_df, x.cust_number, x.issue_date_format, pay_type='VeryLate'),axis=1)
+
+    #we will obtain avg amount of VeryLate payments
+    data_df['avg_of_VeryLate_pays'] = data_df.apply(lambda x: get_avg_amount_of_pays_per_type(hist_dump_df, x.cust_number, x.issue_date_format, pay_type='VeryLate'),axis=1)
+
+    #we will obtain the no of CriticallyLate payments
+    data_df['no_of_CriticallyLate_pays'] = data_df.apply(lambda x: get_no_of_pays_per_type(hist_dump_df, x.cust_number, x.issue_date_format, pay_type='CriticallyLate'),axis=1)
+
+    #we will obtain avg amount of CriticallyLate payments
+    data_df['avg_of_CriticallyLate_pays'] = data_df.apply(lambda x: get_avg_amount_of_pays_per_type(hist_dump_df, x.cust_number, x.issue_date_format, pay_type='CriticallyLate'),axis=1)
+
+    data_df.to_csv('data_feature_engineered_for_test.csv')
+
+    return data_df
+
+
+def load_and_transform_on_test():
+
+    data_df = load_and_feature_engineering_on_test()
+
+    with open('sector_label_encoder.pkl', 'rb') as f:
+        le = pickle.load(f)
+
+    data_df['sector_label'] = le.transform(data_df['sector_format'])
+
+    final_df = data_df[['no_of_days_for_due_pay',	'US_Dollars',	'no_of_early_pays',
+                    'avg_of_early_pays'	,'no_of_OnTime_pays',	'avg_of_OnTime_pays',\
+                    'no_of_late_pays',	'avg_of_late_pays',	'no_of_VeryLate_pays',	\
+                    'avg_of_VeryLate_pays',	'no_of_CriticallyLate_pays',	'avg_of_CriticallyLate_pays', \
+                    'sector_label']]
+
+    infer_df = final_df
+
+    infer_df.to_csv("Inference.csv")
+    X = infer_df.to_numpy()
+    print(X.shape)
+
+    return X, infer_df
+
+
+def infer_the_xgboost_for_invoice_prediction():
+
+    #pass the input array of your choice it should have 13 dimenstions
+    with open('xgb_invoice.pkl', 'rb') as f:
+        clf = pickle.load(f)
+
+    input_array, input_df = load_and_transform_on_test()
+    resp = clf.predict(input_array)
+    input_df['Classification'] = resp
+
+    result_list = input_df['Classification'].to_list()
+
+    input_df.to_csv('Real_time_classification_result.csv')
+
+    return result_list
 
 def load_and_feature_engineering():
     df = pd.read_csv('invoice_dataset.csv')
@@ -151,12 +253,69 @@ def load_and_feature_engineering():
     return data_df
     
 
+def dummy_data_generator():
+    x = 'invoice_id	cust_number	name_customer	Industry_Sector	buisness_year	issue_date	due_in_date	invoice_currency	total_open_amount'
+    list_of_cols = x.split('\t')
+
+    num_of_json = 10
+    json_list = []
+
+    choice_list = [i for i in range(10000)]
+    for i in range(num_of_json):
+        temp_dict = {}
+        for val in list_of_cols:
+            temp_dict[str(val)] = str(np.random.choice(choice_list))
+        json_list.append(temp_dict)
+    
+    with open('input_json_for_inference.json', 'w') as f:
+        json.dump(json_list, f)
+
+def real_time_infer_using_json(file_path):
+    x = 'invoice_id	cust_number	name_customer	Industry_Sector	buisness_year	issue_date	due_in_date	invoice_currency	total_open_amount'
+    list_of_cols = x.split('\t')
+    print(list_of_cols)
+
+    if(file_path):
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+
+        test_list = []
+        for json_obj in data:
+            input_list = []
+            for val in list_of_cols:
+                input_list.append(json_obj[val])
+
+            test_list.append(input_list)
+        df  = pd.DataFrame(test_list, columns = list_of_cols)
+        df.to_csv('invoice_dataset_test.csv')
+        result_list = infer_the_xgboost_for_invoice_prediction()
+
+
+        with open('sector_label_encoder.pkl', 'rb') as f:
+            le = pickle.load(f)
+
+        result_list_label = le.inverse_transform(result_list)
+
+        final_result = []
+        for i in range(len(data)):
+            temp_dict = data[i]
+            temp_dict['invoice-class'] = result_list_label[i]
+            final_result.append(temp_dict)
+
+        with open('result.json', 'w') as f:
+            json.dump(final_result, f)
+            
+
 def load_and_transform():
+
     data_df = load_and_feature_engineering()
 
     le = LabelEncoder()
 
     le.fit(data_df['sector_format'])
+
+    with open('sector_label_encoder.pkl', 'wb') as f:
+        pickle.dump(le, f)
 
     data_df['sector_label'] = le.transform(data_df['sector_format'])
 
@@ -227,21 +386,23 @@ def train_and_test_xgboost():
     return clf
 
 
-def read_and_infer():
-    n = int(input("Enter number of elements : "))
-    
-    lst = []
-    # iterating till the range
-    for i in range(0, n):
-        ele = int(input())
-        # adding the element
-        lst.append(ele)  
-    
-    print(f"your Input array is {lst}")
-    input_array = lst
-    np_array = np.array(input_array)
-    np_array = np_array.reshape(1,-1)
-    infer_the_xgboost_for_invoice_prediction(np_array)
+def read_and_infer_play():
+
+    while(1):
+        n = int(input("Enter number of elements : "))
+        
+        lst = []
+        # iterating till the range
+        for i in range(0, n):
+            ele = int(input())
+            # adding the element
+            lst.append(ele)  
+        
+        print(f"your Input array is {lst}")
+        input_array = lst
+        np_array = np.array(input_array)
+        np_array = np_array.reshape(1,-1)
+        infer_the_xgboost_for_invoice_prediction(np_array)
 
 
 def infer_xgboost(clf, input_array):
@@ -249,7 +410,7 @@ def infer_xgboost(clf, input_array):
     print(clf.predict(input_array))
     return
 
-def infer_the_xgboost_for_invoice_prediction(input_array):
+def infer_the_xgboost_for_invoice_prediction_sample(input_array):
 
     #pass the input array of your choice it should have 13 dimenstions
     with open('xgb_invoice.pkl', 'rb') as f:
@@ -277,4 +438,6 @@ if(__name__=="__main__"):
     np_array = np_array.reshape(1,-1)
     infer_the_xgboost_for_invoice_prediction(np_array)
     '''
-    read_and_infer()
+    #train_and_test_xgboost_for_invoice_prediction()
+    dummy_data_generator()
+    real_time_infer_using_json(file_path='input_json_for_inference.json')
