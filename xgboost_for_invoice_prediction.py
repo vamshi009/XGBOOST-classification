@@ -227,10 +227,37 @@ def train_and_test_xgboost():
     return clf
 
 
+def read_and_infer():
+    n = int(input("Enter number of elements : "))
+    
+    lst = []
+    # iterating till the range
+    for i in range(0, n):
+        ele = int(input())
+        # adding the element
+        lst.append(ele)  
+    
+    print(f"your Input array is {lst}")
+    input_array = lst
+    np_array = np.array(input_array)
+    np_array = np_array.reshape(1,-1)
+    infer_the_xgboost_for_invoice_prediction(np_array)
+
+
 def infer_xgboost(clf, input_array):
 
     print(clf.predict(input_array))
     return
+
+def infer_the_xgboost_for_invoice_prediction(input_array):
+
+    #pass the input array of your choice it should have 13 dimenstions
+    with open('xgb_invoice.pkl', 'rb') as f:
+        clf = pickle.load(f)
+
+    resp = clf.predict(input_array)
+    print("class type ", resp)
+  
 
 
 if(__name__=="__main__"):
@@ -243,4 +270,11 @@ if(__name__=="__main__"):
     '''
     #load_and_feature_engineering()
     #load_and_transform()
-    train_and_test_xgboost_for_invoice_prediction()
+    #train_and_test_xgboost_for_invoice_prediction()
+    '''
+    input_array = [i for i in range(13)]
+    np_array = np.array(input_array)
+    np_array = np_array.reshape(1,-1)
+    infer_the_xgboost_for_invoice_prediction(np_array)
+    '''
+    read_and_infer()
