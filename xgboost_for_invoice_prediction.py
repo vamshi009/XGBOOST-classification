@@ -260,7 +260,7 @@ def dummy_data_generator():
     num_of_json = 10
     json_list = []
 
-    choice_list = [i for i in range(10000)]
+    choice_list = [i for i in range(500,1000)]
     for i in range(num_of_json):
         temp_dict = {}
         for val in list_of_cols:
@@ -291,7 +291,7 @@ def real_time_infer_using_json(file_path):
         result_list = infer_the_xgboost_for_invoice_prediction()
 
 
-        with open('sector_label_encoder.pkl', 'rb') as f:
+        with open('payment_type_label_encoder.pkl', 'rb') as f:
             le = pickle.load(f)
 
         result_list_label = le.inverse_transform(result_list)
@@ -302,7 +302,7 @@ def real_time_infer_using_json(file_path):
             temp_dict['invoice-class'] = result_list_label[i]
             final_result.append(temp_dict)
 
-        with open('result.json', 'w') as f:
+        with open('result_sample3.json', 'w') as f:
             json.dump(final_result, f)
             
 
@@ -324,6 +324,10 @@ def load_and_transform():
     le2.fit(data_df['payment_category'])
 
     data_df['ground_truth_labels'] = le2.transform(data_df['payment_category'])
+
+    with open('payment_type_label_encoder.pkl', 'wb') as f1:
+        pickle.dump(le2, f1)
+
 
     final_df = data_df[['no_of_days_for_due_pay',	'US_Dollars',	'no_of_early_pays',
                     'avg_of_early_pays'	,'no_of_OnTime_pays',	'avg_of_OnTime_pays',\
